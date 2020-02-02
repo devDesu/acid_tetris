@@ -1,0 +1,379 @@
+<html>
+    <head>
+        <script>
+            let LINES = 16;
+            let ALLOW_MUTATE = false;
+            let color = {
+                BLACK: "#000000",
+                RED: "#FF0000",
+                GREEN: "#00FF00",
+                BLUE: "#0000FF",
+                ORANGE: "orange",
+                LIME: "lime",
+                PURPLE: "purple"
+            }
+            let BLOCK_SIZE = 40;
+            let LINE_SIZE = 10;
+            let STATE = []
+            let TICKER = 0;
+            
+            let figureType = [
+                [
+                    [0,0,0,0],
+                    [0,0,0,0],
+                    [0,0,0,0],
+                    [1,1,1,1],
+                ],
+                [
+                    [0,0,0,0],
+                    [0,0,0,0],
+                    [1,0,0,0],
+                    [1,1,1,0],
+                ],
+                [
+                    [0,0,0,0],
+                    [0,0,0,0],
+                    [1,1,0,0],
+                    [0,1,1,0],
+                ],
+                [
+                    [0,0,0,0],
+                    [0,0,0,0],
+                    [0,1,0,0],
+                    [1,1,1,0],
+                ],
+                [
+                    [0,0,0,0],
+                    [0,1,1,0],
+                    [0,1,1,0],
+                    [0,0,0,0],
+                ],
+            ]
+            
+            function randomInteger(min, max) {
+              // случайное число от min до (max+1)
+              let rand = min + Math.random() * (max + 1 - min);
+              return Math.floor(rand);
+            }
+            
+            function get_canvas_ctx() {
+                let canvas = document.getElementById('cnv');
+                return canvas.getContext('2d');
+            }
+            
+            function gen_color() {
+                return color[Object.keys(color)[randomInteger(1, Object.keys(color).length-1)]]
+            }
+            
+            function mutate_figure() {
+                Figure.state.position.y = -Figure.state.MATRIX_SIZE;
+                Figure.state.position.x = randomInteger(0, LINE_SIZE-4);
+                Figure.state.matrix = figureType[Math.floor(Math.random() * figureType.length)]
+                Figure.state.color = gen_color();
+            }
+            
+            function init_state() {
+                let ctx = get_canvas_ctx();
+                STATE = new Array(LINES);
+                for(var i=0;i<LINES;i++) {
+                    STATE[i] = new Array(LINE_SIZE);
+                    for(var j=0;j<LINE_SIZE;j++) {
+                        STATE[i][j] = new Block(ctx, color.BLACK, {x: j, y: i});
+                    }
+                }
+                mutate_figure();
+            }
+            
+            function show_state() {
+                STATE.forEach((line) => {line.forEach((block) => {block.draw()})});
+            }
+            
+            function tick() {
+                
+            
+                if (ALLOW_MUTATE) {
+                    mutate_figure();    
+                    ALLOW_MUTATE = false;
+                    
+                    for(var i=0;i<LINES;i++) {
+                        check_line(i);
+                    }
+                }
+                
+                Figure.fall()
+                
+                show_state();
+            }
+            
+            
+            function check_line(line_idx) {
+                if (STATE[line_idx].every(block => block.getColor() !== color.BLACK)) {
+                    STATE[line_idx].map(block => block.setColor(color.BLACK))
+                }
+            }
+        
+            class Block {
+                constructor (ctx, color, position) {
+                    // Black block is empty block
+                    this.ctx = ctx;
+                    this.color = color;
+                    this.position = position;
+                    this.isFigurePart = false;
+                    /* {
+                        x: 0,
+                        y: 0,
+                    } */
+                }
+                
+                toString() {
+                    return `x: ${this.position.x}, y: ${this.position.y}, color: ${this.color}`;
+                }
+                
+                draw = () => {
+                    this.ctx.fillStyle = this.color;
+                    this.ctx.fillRect(this.position.x*BLOCK_SIZE, this.position.y*BLOCK_SIZE, BLOCK_SIZE, BLOCK_SIZE);
+                }
+                
+                canFall = () => {
+                    return (this.position.y < LINES-1 && (STATE[this.position.y + 1][this.position.x].getColor() === color.BLACK || STATE[this.position.y + 1][this.position.x].isFigure()));
+                }
+                
+                unsetFigure = () => {
+                    this.isFigurePart = false;
+                }
+                
+                setFigure = () => {
+                    this.isFigurePart = true;
+                }
+                
+                isFigure = () => {
+                    return this.isFigurePart;
+                }
+                
+                move = (direction) => {
+                    if (this.position.x < LINE_SIZE && this.position.x >=  0) {
+                        STATE[this.position.y][this.position.x].setColor(color.BLACK);
+                    }
+                    STATE[this.position.y][this.position.x + direction].setColor(this.color);
+                }
+                
+                canMove = (direction) => {
+                    let canMoveInDirection = this.position.x + direction >= 0 && this.position.x + direction < LINE_SIZE
+                    return canMoveInDirection && (STATE[this.position.y][this.position.x + direction].getColor() === color.BLACK || STATE[this.position.y][this.position.x + direction].isFigure())
+                }
+                
+                fall = () => {
+                    if (this.position.y >= 0) {
+                        STATE[this.position.y][this.position.x].setColor(color.BLACK);
+                        STATE[this.position.y+1][this.position.x].setColor(this.color);
+                    }
+                }
+                
+                getColor = () => {
+                    return this.color;
+                }
+                
+                setColor(color) {
+                    this.color = color;
+                }
+                
+            }
+        
+            let Figure  = { // Single instance
+                state: {
+                    matrix: figureType[0],
+                    position: {
+                       x: 0,
+                       y: 0,
+                    },
+                    color: color.BLACK,
+                    MATRIX_SIZE: 4,
+                },
+                
+                rotate: function () { 
+                
+                    for (var i=this.state.MATRIX_SIZE-1;i>=0;i--) {
+                        for (var j=0;j<this.state.MATRIX_SIZE;j++) {
+                            if (this.state.matrix[i][j])
+                                STATE[this.state.position.y + i][this.state.position.x + j].setColor(color.BLACK)
+                        }
+                    }
+                
+                    console.table(this.state.matrix)
+                    let N = this.state.MATRIX_SIZE;
+                    let tmp = JSON.parse(JSON.stringify(this.state.matrix))
+                    
+                    for (let x = 0; x < Math.floor(N / 2); x++) 
+                    {  
+                        for (let y = x; y < N-x-1; y++) 
+                        {
+                            let temp = tmp[x][y]; 
+                            tmp[x][y] = tmp[y][N-1-x]; 
+                            tmp[y][N-1-x] =tmp[N-1-x][N-1-y]; 
+                            tmp[N-1-x][N-1-y] =tmp[N-1-y][x]; 
+                            tmp[N-1-y][x] = temp; 
+                        } 
+                    } 
+                    
+                    let left_border = 4
+                    let right_border = -1
+                    
+                    for (var i=0;i<this.state.MATRIX_SIZE;i++) {
+                        for (var j=0;j<this.state.MATRIX_SIZE;j++) {
+                            if(tmp[i][j]) {
+                                if (left_border > j)
+                                    left_border = j
+                                if (right_border < j)
+                                    right_border = j
+                            }
+                        }
+                    }
+                    console.log(left_border, right_border);
+                    console.table(tmp);
+                    
+                    if ( (left_border + this.state.position.x < 0) || (right_border + this.state.position.x >= LINE_SIZE) ) {
+                        console.log('Cannot rotate!')
+                        return;
+                    }
+                    
+                    this.state.matrix = tmp
+                    
+                    console.table(this.state.matrix)
+                    
+                    this.draw();
+                    show_state();
+                    
+                },
+                
+                draw: function() {
+                    for (var i=0;i<this.state.MATRIX_SIZE;i++) {
+                        for (var j=0;j<this.state.MATRIX_SIZE;j++) {
+                            if (this.state.position.y+i >= 0) {
+                        
+                                if (this.state.matrix[i][j] === 1) {
+                                    STATE[this.state.position.y+i][this.state.position.x+j].setColor(this.state.color);    
+                                /*} else {
+                                    STATE[this.state.position.y+i][this.state.position.x+j].setColor(color.BLACK);   
+                                */}
+                            }
+                        }
+                    }
+                },
+                
+                move: function(direction) {
+                    let canMoveFlag = true
+                    if (direction == 'LEFT') {
+                        direction = -1
+                    } else {
+                        direction = 1
+                    }
+                    
+                    for (var i=this.state.MATRIX_SIZE-1;i>=0;i--) {
+                        for (var j=0;j<this.state.MATRIX_SIZE;j++) {
+                            if (this.state.matrix[i][j] && (this.state.position.x + j >= 0 || this.state.position.x + j < LINE_SIZE - 1))
+                                STATE[this.state.position.y + i][this.state.position.x + j].setFigure()
+                        }
+                    }
+                    
+                    for (var i=this.state.MATRIX_SIZE-1;i>=0;i--) {
+                        for (var j=0;j<this.state.MATRIX_SIZE;j++) {
+                            if (this.state.matrix[i][j] && (this.state.position.x + j >= 0 || this.state.position.x + j < LINE_SIZE - 1)) {
+                                canMoveFlag = canMoveFlag && STATE[this.state.position.y + i][this.state.position.x + j].canMove(direction)
+                            
+                            }
+                        }
+                    }
+                    
+                    console.log(`Can move: ${canMoveFlag}`)
+                    
+                    if (canMoveFlag) {
+                        for (var i=this.state.MATRIX_SIZE-1;i>=0;i--) {
+                            for (var j=0;j<this.state.MATRIX_SIZE;j++) {
+                                if (this.state.position.y + i >= 0 && this.state.matrix[i][j]) {
+                                    //console.log(`fall x ${this.state.position.x + j}, y ${this.state.position.y + i}`)
+                                    STATE[this.state.position.y + i][this.state.position.x + j].move(direction)
+                                }
+                            }
+                        }
+                        this.state.position.x += direction;
+                    }
+                    for (var i=this.state.MATRIX_SIZE-1;i>=0;i--) {
+                        for (var j=0;j<this.state.MATRIX_SIZE;j++) {
+                            if (this.state.position.y + i >= 0 && this.state.matrix[i][j]) {
+                                STATE[this.state.position.y+i][this.state.position.x + j].unsetFigure()
+                            }
+                        }
+                    }
+                    this.draw();
+                    show_state();
+                },
+                
+                fall: function () {
+                    let canFallFlag = true
+                    for (var i=this.state.MATRIX_SIZE-1;i>=0;i--) {
+                        for (var j=0;j<this.state.MATRIX_SIZE;j++) {
+                            if (this.state.position.y + i >= 0 && this.state.matrix[i][j]) {
+                                //console.log(this.state.position.y + i, this.state.position.x + j)
+                                STATE[this.state.position.y+i][this.state.position.x + j].setFigure()
+                                canFallFlag = canFallFlag && STATE[this.state.position.y + i][this.state.position.x + j].canFall()
+                            }
+                        }
+                    }
+                    
+                    //console.log(`Can fall: ${canFallFlag}`)
+                    
+                    if (canFallFlag) {
+                        for (var i=this.state.MATRIX_SIZE-1;i>=0;i--) {
+                            for (var j=0;j<this.state.MATRIX_SIZE;j++) {
+                                if (this.state.position.y + i >= 0 && this.state.matrix[i][j]) { // only visible part
+                                    STATE[this.state.position.y + i][this.state.position.x + j].fall()
+                                }
+                            }
+                        }
+                        
+                        this.state.position.y += 1
+                    } else {
+                        ALLOW_MUTATE = true;
+                    }
+                    
+                    for (var i=this.state.MATRIX_SIZE-1;i>=0;i--) {
+                        for (var j=0;j<this.state.MATRIX_SIZE;j++) {
+                            if (this.state.position.y + i >= 0 && this.state.matrix[i][j]) {
+                                STATE[this.state.position.y+i][this.state.position.x + j].unsetFigure()
+                            }
+                        }
+                    }
+                    this.draw();
+                }
+            }
+            
+            document.addEventListener('keydown', (e) => {
+                    console.log(e.key)
+                    if(e.key === 'ArrowLeft') {
+                        Figure.move('LEFT')
+                    }
+                    else if (e.key === 'ArrowRight') {
+                        Figure.move('RIGHT')
+                    } else if (e.key === ' ') {
+                        Figure.rotate();
+                    }
+                }
+            )
+            
+            setInterval(tick, 350);
+            
+        </script>
+        
+    </head>
+    
+    <body style="background-color: gray" onload="init_state();">
+    
+    <button onclick="tick()">Tick</button>
+    <button onclick="Figure.move('LEFT')">LEFT</button>
+    <button onclick="Figure.move('RIGHT')">RIGHT</button>
+    <button onclick="Figure.rotate()">ROTATE</button>
+    <center>
+        <canvas id="cnv" width="400px" height="640px" style="background-color: black;"/>
+    </center>
+    </body>
+</html>
